@@ -10,12 +10,7 @@ from tqdm import tqdm
 from deepface.DeepFace import represent
 import pandas as pd
 import time
-
-
-model = YOLO("./yolov8n-face.pt")
-
-
-cap = cv2.VideoCapture("/Users/artem/Documents/qq.mp4")
+from IPython.display import display
 
 
 def detect_yolo(model: YOLO, frame: np.ndarray):
@@ -23,34 +18,8 @@ def detect_yolo(model: YOLO, frame: np.ndarray):
     xyxy_np = output[0].boxes.xyxy.cpu().numpy()
     conf = output[0].boxes.conf.cpu().numpy()
     xyxy_np = xyxy_np.astype(int)
-    xyxy_np = xyxy_np[conf > 0.65]
+    xyxy_np = xyxy_np[conf > 0.6]
     return xyxy_np
-
-
-while True:
-    ret, frame = cap.read()
-    # cv2.imshow('frame', frame)
-
-    faces = detect_yolo(model, frame)
-    # print(faces)
-
-    for face_0 in faces:
-        cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
-
-    cv2.imshow('face', frame[faces[0][1]:faces[0][3], faces[0][0]:faces[0][2]])
-
-    # faces = DeepFace.extract_faces(frame, detector_backend='mtcnn', enforce_detection=False)
-    # print(faces)
-
-    # if 0.8 < faces[0]['confidence'] < 4.0:
-    #     # print(faces[0]['confidence'])
-    #     cv2.imshow('face', faces[0]['face'])
-    #     print(DeepFace.find(faces[0]['face'], 'faces', detector_backend='opencv', enforce_detection=False))
-
-    # DeepFace.find()
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
 
 
 def create_pkl(db_path):
@@ -59,7 +28,7 @@ def create_pkl(db_path):
     enforce_detection = True
     align = True
     normalization = "base"
-    silent = False
+    silent = True
 
     file_name = f"representations.pkl"
 
@@ -133,16 +102,15 @@ def create_pkl(db_path):
         )
 
 
-# create_pkl('./database')
-def find(img_path, reprs):
+def find(img, reprs):
     tic = time.time()
 
     model_name = "VGG-Face"
     detector_backend = "opencv"
-    enforce_detection = True
+    enforce_detection = False
     align = True
     normalization = "base"
-    silent = False
+    silent = True
     target_size = functions.find_target_size(model_name=model_name)
     distance_metric = "cosine"
 
@@ -153,7 +121,7 @@ def find(img_path, reprs):
 
     # img path might have more than once face
     target_objs = functions.extract_faces(
-        img=img_path,
+        img=img,
         target_size=target_size,
         detector_backend=detector_backend,
         grayscale=False,
@@ -161,7 +129,7 @@ def find(img_path, reprs):
         align=align,
     )
 
-    resp_obj = []
+    faces_found = []
 
     for target_img, target_region, _ in target_objs:
         target_embedding_obj = represent(
@@ -176,10 +144,10 @@ def find(img_path, reprs):
         target_representation = target_embedding_obj[0]["embedding"]
 
         result_df = df.copy()  # df will be filtered in each img
-        # result_df["source_x"] = target_region["x"]
-        # result_df["source_y"] = target_region["y"]
-        # result_df["source_w"] = target_region["w"]
-        # result_df["source_h"] = target_region["h"]
+        result_df["source_x"] = target_region["x"]
+        result_df["source_y"] = target_region["y"]
+        result_df["source_w"] = target_region["w"]
+        result_df["source_h"] = target_region["h"]
 
         distances = []
         for index, instance in df.iterrows():
@@ -205,12 +173,14 @@ def find(img_path, reprs):
 
         threshold = dst.findThreshold(model_name, distance_metric)
         result_df = result_df.drop(columns=[f"{model_name}_representation"])
-        result_df = result_df[result_df[f"{model_name}_{distance_metric}"] <= threshold]
+        result_df = result_df[result_df[f"{model_name}_{distance_metric}"] <= 1]
         result_df = result_df.sort_values(
             by=[f"{model_name}_{distance_metric}"], ascending=True
         ).reset_index(drop=True)
 
-        resp_obj.append(result_df)
+        print(result_df)
+
+        faces_found.extend(result_df['identity'].tolist())
 
     # -----------------------------------
 
@@ -219,6 +189,49 @@ def find(img_path, reprs):
     if not silent:
         print("find function lasts ", toc - tic, " seconds")
 
-    return resp_obj
+    return faces_found
 
 
+create_pkl("database")
+
+model = YOLO("./yolov8n-face.pt")
+cap = cv2.VideoCapture(0)
+
+# frame = cv2.imread('me2.jpg')
+# faces = detect_yolo(model, frame)
+#
+# for i, face_0 in enumerate(faces):
+#     cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
+#     cv2.imwrite(f'rect_me_{i}.jpg', frame)
+
+# cv2.imshow('frame', frame)
+# result = find('me.jpg', 'database/representations.pkl')
+# print(result)
+#
+
+while True:
+    ret, frame = cap.read()
+    cv2.imshow('face', frame)
+    faces = detect_yolo(model, frame)
+
+    if len(faces) > 0:
+        for face_0 in faces:
+            face_rect = cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
+            new_img = frame[faces[0][1]:faces[0][3], faces[0][0]:faces[0][2]]
+            faces_found = find(new_img, 'database/representations.pkl')
+            if len(faces_found) > 0:
+                print(faces_found)
+            cv2.imshow('face', face_rect)
+    #
+    #     # faces = DeepFace.extract_faces(frame, detector_backend='mtcnn', enforce_detection=False)
+    #     # print(faces)
+    #
+    #     # if 0.8 < faces[0]['confidence'] < 4.0:
+    #     #     # print(faces[0]['confidence'])
+    #     #     cv2.imshow('face', faces[0]['face'])
+    #     #     print(DeepFace.find(faces[0]['face'], 'faces', detector_backend='opencv', enforce_detection=False))
+    #
+    #     # DeepFace.find()
+    #
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
