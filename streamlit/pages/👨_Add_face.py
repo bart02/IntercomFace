@@ -6,13 +6,13 @@ import numpy as np
 import streamlit as st
 from ultralytics import YOLO
 
-from detect import detect_yolo
+from detect import detect
 
 
 @st.cache_data
 def detect_face(cv2_img: np.ndarray):
     model = YOLO("models/yolov8n-face.pt")
-    detections = detect_yolo(model, cv2_img, 0)
+    detections = detect(model, cv2_img, 0)
     return detections
 
 
