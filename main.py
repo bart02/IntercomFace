@@ -1,7 +1,6 @@
 import pickle
 import cv2
 import numpy as np
-from deepface import DeepFace
 from deepface.commons import functions, realtime, distance as dst
 from ultralytics.yolo.engine.results import Results
 from ultralytics import YOLO
@@ -10,7 +9,11 @@ from tqdm import tqdm
 from deepface.DeepFace import represent
 import pandas as pd
 import time
-from IPython.display import display
+import requests
+from collections import deque
+from datetime import datetime
+import threading
+from threading import Lock
 
 
 def detect_yolo(model: YOLO, frame: np.ndarray):
@@ -173,12 +176,12 @@ def find(img, reprs):
 
         threshold = dst.findThreshold(model_name, distance_metric)
         result_df = result_df.drop(columns=[f"{model_name}_representation"])
-        result_df = result_df[result_df[f"{model_name}_{distance_metric}"] <= 1]
+        result_df = result_df[result_df[f"{model_name}_{distance_metric}"] <= threshold]
         result_df = result_df.sort_values(
             by=[f"{model_name}_{distance_metric}"], ascending=True
         ).reset_index(drop=True)
 
-        print(result_df)
+        # print(result_df)
 
         faces_found.extend(result_df['identity'].tolist())
 
@@ -192,46 +195,107 @@ def find(img, reprs):
     return faces_found
 
 
+def open_door():
+    url = "https://domofon.tattelecom.ru//v1/subscriber/open-intercom"
+    headers = {
+        "Host": "domofon.tattelecom.ru",
+        "Cookie": "_csrf-backend=626dedc14d1f915b031402db06b12ae0898317098a95eb569f3ac390a4841baea%3A2%3A%7Bi%3A0%3Bs"
+                  "%3A13%3A%22_csrf-backend%22%3Bi%3A1%3Bs%3A32%3A%22D7n8GYUEq-lX0lnENvvuas6uK8tKzvAt%22%3B%7D",
+        "Accept": "*/*",
+        "Content-Type": "application/json",
+        "User-Agent": "TTC%20Intercom/4 CFNetwork/1399 Darwin/22.1.0",
+        "access-token": "8iMKsIUur1lTeZlZ0qow_rMJ3oRkx1YO",
+        "Accept-Language": "ru",
+        "Pragma": "no-cache",
+        "Cache-Control": "no-cache"
+    }
+    data = {
+        "phone": "79069595030",
+        "device_code": "14A5F9E0-753F-4139-B418-528609905E53",
+        "intercom_id": "3497"
+    }
+
+    resp = requests.post(url, headers=headers, json=data)
+    print(resp.text)
+
+
+class Camera:
+    def __init__(self, rtsp_link):
+        self.ret, self.frame = False, None
+        self.capture = cv2.VideoCapture(rtsp_link)
+        thread = threading.Thread(target=self.rtsp_cam_buffer, args=(), name="rtsp_read_thread")
+        thread.daemon = True
+        thread.start()
+
+    def rtsp_cam_buffer(self):
+        while True:
+            self.ret, self.frame = self.capture.read()
+
 create_pkl("database")
-
 model = YOLO("./yolov8n-face.pt")
-cap = cv2.VideoCapture(0)
+link = 'https://streamer109.tattelecom.ru/intercom_3497/mpegts?token=2.CdOZqaunAmQABftqL-ZwiffDuV0yYbGTVARII9pEvgARNp_h'
+cam = Camera(link)
+# cap = cv2.VideoCapture(link)
 
-# frame = cv2.imread('me2.jpg')
-# faces = detect_yolo(model, frame)
+# cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 #
-# for i, face_0 in enumerate(faces):
-#     cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
-#     cv2.imwrite(f'rect_me_{i}.jpg', frame)
+# cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-# cv2.imshow('frame', frame)
-# result = find('me.jpg', 'database/representations.pkl')
-# print(result)
-#
+
+duration = 30
+there_are_faces_deq = deque(maxlen=duration)
+print("start")
+while True:
+    frame = cam.frame
+    if frame is None:
+        continue
+    height, width, channels = frame.shape
+    if height == 0 and width == 0:
+        continue
+
+    cv2.imshow('frame', frame)
+
+    faces = detect_yolo(model, frame)
+    if len(faces) > 0:
+        there_are_faces_deq.append(1)
+    else:
+        there_are_faces_deq.append(0)
+
+    values = list(there_are_faces_deq)
+    ones = values.count(1)
+
+    if ones == duration:
+        for face_0 in faces:
+            # face_rect = cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
+            new_img = frame[faces[0][1]:faces[0][3], faces[0][0]:faces[0][2]]
+
+            faces_found = find(new_img, 'database/representations.pkl')
+
+            if len(faces_found):
+                response = requests.get('https://webhook.site/16c53608-1a3c-447d-b577-f716bba3810a/')
+                # open_door()
+
+            # cv2.imshow('face', face_rect)
+    else:
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        print(current_time, ones)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 while True:
     ret, frame = cap.read()
     cv2.imshow('face', frame)
-    faces = detect_yolo(model, frame)
+    faces = detect(model, frame)
 
     if len(faces) > 0:
         for face_0 in faces:
             face_rect = cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
             new_img = frame[faces[0][1]:faces[0][3], faces[0][0]:faces[0][2]]
-            faces_found = find(new_img, 'database/representations.pkl')
+            faces_found = find(new_img, 'faces/representations.pkl')
             if len(faces_found) > 0:
                 print(faces_found)
             cv2.imshow('face', face_rect)
-    #
-    #     # faces = DeepFace.extract_faces(frame, detector_backend='mtcnn', enforce_detection=False)
-    #     # print(faces)
-    #
-    #     # if 0.8 < faces[0]['confidence'] < 4.0:
-    #     #     # print(faces[0]['confidence'])
-    #     #     cv2.imshow('face', faces[0]['face'])
-    #     #     print(DeepFace.find(faces[0]['face'], 'faces', detector_backend='opencv', enforce_detection=False))
-    #
-    #     # DeepFace.find()
-    #
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
