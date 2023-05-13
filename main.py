@@ -1,20 +1,14 @@
-import cv2
-from ultralytics import YOLO
-from detect import detect, find
-from embed import create_pkl
-import pickle
-import numpy as np
-from deepface.commons import functions, realtime, distance as dst
-from ultralytics.yolo.engine.results import Results
-import os
-from tqdm import tqdm
-from deepface.DeepFace import represent
-import pandas as pd
+import threading
 import time
-import requests
 from collections import deque
 from datetime import datetime
-import threading
+
+import cv2
+import requests
+from ultralytics import YOLO
+
+from detect import detect, find
+from embed import create_pkl
 
 create_pkl("faces")
 model = YOLO("models/yolov8n-face.pt")
@@ -65,11 +59,10 @@ class Camera:
             self.ret, self.frame = self.capture.read()
 
 
-
 link = 'https://streamer109.tattelecom.ru/intercom_3497/mpegts?token=2.CdOZqaunAmQABftqL-ZwiffDuV0yYbGTVARII9pEvgARNp_h'
 cam = Camera(link)
 
-duration = 30
+duration = 10
 there_are_faces_deq = deque(maxlen=duration)
 print("start")
 while True:
@@ -82,30 +75,26 @@ while True:
 
     cv2.imshow('frame', frame)
 
-    faces = detect_yolo(model, frame)
-    if len(faces) > 0:
-        there_are_faces_deq.append(1)
-    else:
-        there_are_faces_deq.append(0)
+    faces = detect(model, frame)
 
-    values = list(there_are_faces_deq)
-    ones = values.count(1)
+    faces_found = []
+    for face_0 in faces:
+        print("face found")
+        # face_rect = cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
+        new_img = frame[faces[0][1]:faces[0][3], faces[0][0]:faces[0][2]]
+        faces_found = find(new_img, 'faces/representations.pkl', threshold=0.35)
+        print(faces_found)
 
-    if ones == duration:
-        for face_0 in faces:
-            # face_rect = cv2.rectangle(frame, (face_0[0], face_0[1]), (face_0[2], face_0[3]), (0, 255, 0), 2)
-            new_img = frame[faces[0][1]:faces[0][3], faces[0][0]:faces[0][2]]
+    there_are_faces_deq.append(len(faces_found) > 0)
 
-            faces_found = find(new_img, 'database/representations.pkl')
+    ones = there_are_faces_deq.count(True)
 
-            if len(faces_found):
-                response = requests.get('https://webhook.site/16c53608-1a3c-447d-b577-f716bba3810a/')
-                # open_door()
-
-            # cv2.imshow('face', face_rect)
-    else:
-        now = datetime.now()
-        current_time = now.strftime("%H:%M:%S")
-        print(current_time, ones)
+    if ones >= duration * 0.7:
+        # response = requests.get('https://webhook.site/16c53608-1a3c-447d-b577-f716bba3810a/')
+        open_door()
+    # else:
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print(current_time, ones)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
