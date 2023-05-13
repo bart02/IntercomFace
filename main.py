@@ -19,7 +19,13 @@ import threading
 create_pkl("faces")
 model = YOLO("models/yolov8n-face.pt")
 
+last_request = 0
 def open_door():
+    global last_request
+
+    if time.time() - last_request < 60:
+        return
+
     url = "https://domofon.tattelecom.ru//v1/subscriber/open-intercom"
     headers = {
         "Host": "domofon.tattelecom.ru",
@@ -40,7 +46,10 @@ def open_door():
     }
 
     resp = requests.post(url, headers=headers, json=data)
+    print("OPEN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     print(resp.text)
+
+    last_request = time.time()
 
 
 class Camera:
