@@ -10,7 +10,7 @@ from ultralytics.yolo.engine.results import Results
 from distance import find_distance
 
 
-def detect(model: YOLO, frame: np.ndarray, thresh=0.1):
+def detect(model: YOLO, frame: np.ndarray, thresh=0.6):
     output: list[Results] = model.predict(frame, verbose=False)
     xyxy_np = output[0].boxes.xyxy.cpu().numpy()
     conf = output[0].boxes.conf.cpu().numpy()
@@ -19,8 +19,9 @@ def detect(model: YOLO, frame: np.ndarray, thresh=0.1):
     return xyxy_np
 
 
-def find(img, reprs, model_name="VGG-Face", normalization="base", distance_metric="cosine"):
-    threshold = dst.findThreshold(model_name, distance_metric)
+def find(img, reprs, model_name="VGG-Face", normalization="base", distance_metric="cosine", threshold=None):
+    if threshold is None:
+        threshold = dst.findThreshold(model_name, distance_metric)
 
     with open(reprs, "rb") as f:
         representations = pickle.load(f)
