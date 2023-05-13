@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
 import pickle
-from tqdm import tqdm
+from tqdm import tqdm as otqdm
 from deepface.DeepFace import represent
 from pathlib import Path
 
@@ -10,7 +10,8 @@ def create_pkl(db_path,
                model_name="VGG-Face",
                normalization="base",
                file_name="representations.pkl",
-               use_cluster=True):
+               use_cluster=True,
+               tqdm=otqdm):
     p = Path(db_path)
     photo_paths = [str(f) for f in p.glob("**/*.jpg")] + \
                   [str(f) for f in p.glob("**/*.jpeg")] + \
@@ -35,7 +36,6 @@ def create_pkl(db_path,
     else:
         representations = list(zip(photo_paths, embeddings))
 
-    print([e[0] for e in representations])
     with open(f"{db_path}/{file_name}", "wb") as f:
         pickle.dump(representations, f)
 

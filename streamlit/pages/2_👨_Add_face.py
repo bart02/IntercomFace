@@ -4,9 +4,11 @@ from uuid import uuid4
 import cv2
 import numpy as np
 import streamlit as st
+from stqdm import stqdm
 from ultralytics import YOLO
 
 from detect import detect
+from embed import create_pkl
 
 
 @st.cache_data
@@ -71,4 +73,5 @@ if file or camera:
         next_btn.empty()
         (p / text).mkdir(exist_ok=True)
         cv2.imwrite(str(p / text / f"{str(uuid4())[:8]}.jpg"), face)
+        create_pkl("faces", tqdm=stqdm)
         st.success("Face saved successfully")
