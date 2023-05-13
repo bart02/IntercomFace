@@ -26,5 +26,29 @@ The link contains the number of the intercom and the token. The token is valid f
 
 So, we have a video stream, and we can start working on the project.
 
+### Face detection
+We have used many models, but YOLOv8 was the best in terms of time and accuracy.
+
 ### Face recognition
-We need to recognize faces in the video stream. We use the OpenCV library for this. We use the Haar cascade classifier to detect faces. We use the LBPH (Local Binary Patterns Histograms) algorithm to recognize faces.
+We need to recognize faces in the video stream. We use the DeepFace library for this, VGG-Face model.
+
+### Web interface
+We have created a web interface for managing users and add new users to the database. We have used the Streamlit framework for this.
+
+## How to use
+### Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### Run 
+```bash
+bash start.sh
+```
+
+## Possible Improvements
+- [ ] Add a database for storing users
+- [ ] Add a Telegram bot
+- [ ] Add a web interface for viewing the video stream
+- [ ] Add a web interface for viewing the logs
+- [ ] Select and fine-tune the face recognition model for better accuracy

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+/usr/local/Caskroom/miniconda/base/envs/IntercomFace1/bin/python -m streamlit run streamlit/IntercomFace.py & /usr/local/Caskroom/miniconda/base/envs/IntercomFace1/bin/python main.py
